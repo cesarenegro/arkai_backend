@@ -1,6 +1,6 @@
-// Fast AI rendering endpoint using SDXL Lightning Multi-ControlNet
-// Updated: 2026-03-08 - Using lucataco/sdxl-lightning-multi-controlnet for fast image generation (~12 seconds)
-// This model supports img2img with ControlNet for structure preservation
+// Fast AI rendering endpoint using Stable Interiors V2
+// Updated: 2026-03-08 - Using youzu/stable-interiors-v2 for fast interior design rendering (~13 seconds)
+// This model is purpose-built for interior design with built-in structure preservation
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -72,12 +72,12 @@ export default async function handler(req, res) {
 
     console.log('Image uploaded successfully:', imageUrl);
 
-    // Generate enhanced prompt for fast rendering
+    // Generate enhanced prompt for interior design
     const basePrompt = `Transform this ${roomType} interior space into ${style} style. ${styleDescription}. Maintain the room's structure and layout while applying the new design aesthetic.`;
     const enhancedPrompt = `${basePrompt}, masterfully designed interior, photorealistic, interior design magazine quality, 8k uhd, highly detailed`;
 
-    // Start Replicate prediction with SDXL Lightning Multi-ControlNet (fast mode)
-    console.log('Starting fast Replicate prediction with SDXL Lightning...');
+    // Start Replicate prediction with Stable Interiors V2
+    console.log('Starting fast Replicate prediction with Stable Interiors V2...');
     const response = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
@@ -85,15 +85,14 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        version: 'd5116b11698b41d34c322cbd7b0bf068015e47831af0527de7a178dc59c5f2ee',  // SDXL Lightning Multi-ControlNet
+        version: '4836eb257a4fb8b87bac9eacbef9292ee8e1a497398ab96207067403a4be2daf',  // Stable Interiors V2
         input: {
           image: imageUrl,
           prompt: enhancedPrompt,
-          control_type_1: 'edge_canny',  // Use canny edge detection for structure preservation
-          controlnet_1_conditioning_scale: 0.8,  // Strong structure preservation
-          num_inference_steps: 4,  // Lightning 4-step for speed
-          guidance_scale: 1.0,  // Low guidance for 4-step Lightning
-          negative_prompt: 'ugly, deformed, noisy, blurry, low quality, glitch, distorted, disfigured, bad proportions, duplicate, out of frame, watermark'
+          negative_prompt: 'ugly, deformed, noisy, blurry, low quality, glitch, distorted, disfigured, bad proportions, duplicate, out of frame, watermark, text, signature',
+          num_inference_steps: 30,  // Optimal for quality/speed balance
+          guidance_scale: 7.5,  // Standard guidance
+          prompt_strength: 0.8  // Strong transformation while preserving structure
         }
       })
     });
@@ -112,7 +111,7 @@ export default async function handler(req, res) {
       predictionId: data.id,
       status: data.status,
       renderingType: 'fast',
-      model: 'sdxl-lightning-multi-controlnet'
+      model: 'stable-interiors-v2'
     });
 
   } catch (error) {
