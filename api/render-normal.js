@@ -1,6 +1,7 @@
-// Normal quality AI rendering endpoint using SDXL LCM Multi-ControlNet
-// Updated: 2026-03-08 - Using fofr/sdxl-lcm-multi-controlnet-lora for fast rendering (~3-5 seconds)
-// This model uses LCM (Latent Consistency Model) for very fast inference
+// Normal quality AI rendering endpoint using Gemini 3.1 Flash Image Preview
+// Updated: 2026-03-08 - Using gemini-3.1-flash-image-preview for fast image generation (5-10 seconds)
+// This model supports native image-to-image transformation with low latency
+// Synchronous response - returns image immediately
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -25,99 +26,112 @@ export default async function handler(req, res) {
       });
     }
 
-    const replicateApiKey = process.env.REPLICATE_API_TOKEN;
+    const geminiApiKey = process.env.GEMINI_API_KEY;
 
-    if (!replicateApiKey) {
-      return res.status(500).json({ error: 'Replicate API key not configured' });
+    if (!geminiApiKey) {
+      return res.status(500).json({ error: 'Gemini API key not configured' });
     }
 
-    // Upload image to Replicate using their file upload API
-    const imageBuffer = Buffer.from(image, 'base64');
+    console.log('Starting fast render with Gemini 3.1 Flash Image Preview...');
 
-    // Create form data for file upload
-    const FormData = (await import('formdata-node')).FormData;
-    const { Blob } = await import('node:buffer');
+    // Generate enhanced prompt for image transformation
+    const basePrompt = `Transform this ${roomType} interior space into ${style} style. ${styleDescription}. Maintain the room's structure and layout while applying the new design aesthetic.`;
+    const enhancedPrompt = `${basePrompt} Create a masterfully designed interior with photorealistic quality, magazine-worthy composition, 8k detail, and professional lighting.`;
 
-    const formData = new FormData();
-    formData.append('content', new Blob([imageBuffer], { type: 'image/jpeg' }), 'image.jpg');
+    // Call Gemini 3.1 Flash Image Preview API
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=${geminiApiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              {
+                text: enhancedPrompt
+              },
+              {
+                inline_data: {
+                  mime_type: 'image/jpeg',
+                  data: image
+                }
+              }
+            ]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 8192
+          }
+        })
+      }
+    );
 
-    console.log('Uploading image to Replicate for normal quality render...');
-    const uploadResponse = await fetch('https://api.replicate.com/v1/files', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${replicateApiKey}`
-      },
-      body: formData
-    });
-
-    if (!uploadResponse.ok) {
-      const uploadError = await uploadResponse.json();
-      console.error('Image upload error:', uploadError);
-      return res.status(500).json({ error: 'Failed to upload image', details: uploadError });
-    }
-
-    const uploadData = await uploadResponse.json();
-    console.log('Upload response:', JSON.stringify(uploadData, null, 2));
-
-    // Get the image URL from the upload response
-    const imageUrl = uploadData.urls?.get;
-
-    if (!imageUrl) {
-      console.error('No image URL in upload response:', uploadData);
+    if (!geminiResponse.ok) {
+      const errorData = await geminiResponse.json();
+      console.error('Gemini API error:', errorData);
       return res.status(500).json({
-        error: 'Failed to get image URL from upload',
-        details: 'Upload succeeded but no URL returned'
+        error: 'Gemini API request failed',
+        details: errorData
       });
     }
 
-    console.log('Image uploaded successfully:', imageUrl);
+    const geminiData = await geminiResponse.json();
+    console.log('Gemini response received');
 
-    // Generate enhanced prompt for interior design
-    const basePrompt = `Transform this ${roomType} interior space into ${style} style. ${styleDescription}. Maintain the room's structure and layout while applying the new design aesthetic.`;
-    const enhancedPrompt = `${basePrompt}, masterfully designed interior, photorealistic, interior design magazine quality, 8k uhd, highly detailed`;
-
-    // Start Replicate prediction with SDXL LCM Multi-ControlNet
-    console.log('Starting normal quality Replicate prediction with SDXL LCM...');
-    const response = await fetch('https://api.replicate.com/v1/predictions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${replicateApiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        version: '8fa4a8162a4c963b11ee1c2e0f493d92e6c0b3a5e05b64f1db618a55f1ebf699',  // SDXL LCM Multi-ControlNet
-        input: {
-          image: imageUrl,
-          prompt: enhancedPrompt,
-          negative_prompt: 'ugly, deformed, noisy, blurry, low quality, glitch, distorted, disfigured, bad proportions, duplicate, out of frame, watermark, text, signature',
-          num_inference_steps: 4,  // LCM optimal steps
-          guidance_scale: 1.5,  // Lower guidance for LCM
-          controlnet_conditioning_scale: 0.8,
-          control_guidance_start: 0.0,
-          control_guidance_end: 1.0
-        }
-      })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error('Replicate API error:', data);
-      return res.status(500).json({ error: 'Replicate API request failed', details: data });
+    // Extract the generated image from the response
+    if (!geminiData.candidates || geminiData.candidates.length === 0) {
+      console.error('No candidates in Gemini response');
+      return res.status(500).json({
+        error: 'No response from Gemini',
+        details: 'The model did not return any results'
+      });
     }
 
-    console.log('Normal quality prediction started:', data.id);
+    const candidate = geminiData.candidates[0];
 
-    // Return prediction ID immediately - client will poll for status
+    // Check if response contains inline_data (the generated image)
+    if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+      console.error('No content parts in Gemini response');
+      return res.status(500).json({
+        error: 'Invalid response format from Gemini',
+        details: 'No content parts found'
+      });
+    }
+
+    // Extract the image data
+    let imageBase64 = null;
+    for (const part of candidate.content.parts) {
+      if (part.inline_data && part.inline_data.data) {
+        imageBase64 = part.inline_data.data;
+        break;
+      }
+    }
+
+    if (!imageBase64) {
+      console.error('No image data in Gemini response');
+      console.error('Response structure:', JSON.stringify(geminiData, null, 2));
+      return res.status(500).json({
+        error: 'No image generated',
+        details: 'Gemini did not return image data'
+      });
+    }
+
+    console.log('Image generated successfully with Gemini 3.1 Flash');
+
+    // Return the generated image immediately (synchronous response)
     return res.status(200).json({
-      predictionId: data.id,
-      status: data.status,
-      renderingType: 'normal',
-      model: 'sdxl-lcm-multi-controlnet'
+      status: 'succeeded',
+      imageBase64: imageBase64,
+      renderingType: 'fast',
+      model: 'gemini-3.1-flash-image-preview'
     });
 
   } catch (error) {
-    console.error('Normal render error:', error);
+    console.error('Gemini render error:', error);
     return res.status(500).json({
       error: 'Internal server error',
       details: error.message
