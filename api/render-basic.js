@@ -1,5 +1,5 @@
-// Basic quality AI rendering endpoint using Gemini 3.1 Flash Image Preview
-// Updated: 2026-03-08 - Using gemini-3.1-flash-image-preview for ultra-fast image generation (3-5 seconds)
+// Basic quality AI rendering endpoint using Gemini 2.5 Flash Image
+// Updated: 2026-03-08 - Using gemini-2.5-flash-image for ultra-fast image generation (3-5 seconds)
 // This model supports native image-to-image transformation with low latency
 // Synchronous response - returns image immediately
 
@@ -32,15 +32,14 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Gemini API key not configured' });
     }
 
-    console.log('Starting basic render with Gemini 3.1 Flash Image Preview...');
+    console.log('Starting basic render with Gemini 2.5 Flash Image...');
 
     // Generate enhanced prompt for image transformation
-    const basePrompt = `Transform this ${roomType} interior space into ${style} style. ${styleDescription}. Maintain the room's structure and layout while applying the new design aesthetic.`;
-    const enhancedPrompt = `${basePrompt} Create a well-designed interior with good composition and clean aesthetic.`;
+    const promptText = `Transform this ${roomType} interior into ${style} style. ${styleDescription}. Maintain room structure and layout while redesigning the aesthetic.`;
 
-    // Call Gemini 3.1 Flash Image Preview API with correct format
+    // Call Gemini 2.5 Flash Image API with correct format
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent`,
       {
         method: 'POST',
         headers: {
@@ -50,9 +49,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           contents: [{
             parts: [
-              {
-                text: enhancedPrompt
-              },
+              { text: promptText },
               {
                 inline_data: {
                   mime_type: 'image/jpeg',
@@ -62,78 +59,80 @@ export default async function handler(req, res) {
             ]
           }],
           generationConfig: {
-            responseModalities: ['TEXT', 'IMAGE'],
-            temperature: 0.7
+            responseModalities: ['IMAGE']
           }
         })
       }
     );
 
     if (!geminiResponse.ok) {
-      const errorData = await geminiResponse.json();
-      console.error('Gemini API error:', errorData);
+      const errorText = await geminiResponse.text();
+      console.error('Gemini API error:', geminiResponse.status, errorText);
       return res.status(500).json({
         error: 'Gemini API request failed',
-        details: errorData
+        status: geminiResponse.status,
+        details: errorText
       });
     }
 
     const geminiData = await geminiResponse.json();
-    console.log('Gemini response received');
+    console.log('Gemini response structure:', JSON.stringify(geminiData, null, 2));
 
     // Extract the generated image from the response
     if (!geminiData.candidates || geminiData.candidates.length === 0) {
-      console.error('No candidates in Gemini response');
+      console.error('No candidates in response');
       return res.status(500).json({
         error: 'No response from Gemini',
-        details: 'The model did not return any results'
+        details: 'No candidates returned',
+        response: geminiData
       });
     }
 
     const candidate = geminiData.candidates[0];
 
-    // Check if response contains inline_data (the generated image)
-    if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
-      console.error('No content parts in Gemini response');
+    if (!candidate.content || !candidate.content.parts) {
+      console.error('No content parts');
       return res.status(500).json({
-        error: 'Invalid response format from Gemini',
-        details: 'No content parts found'
+        error: 'Invalid response format',
+        details: 'No content parts',
+        candidate
       });
     }
 
-    // Extract the image data
+    // Extract image data
     let imageBase64 = null;
     for (const part of candidate.content.parts) {
       if (part.inline_data && part.inline_data.data) {
         imageBase64 = part.inline_data.data;
+        console.log('Found image data, length:', imageBase64.length);
         break;
       }
     }
 
     if (!imageBase64) {
-      console.error('No image data in Gemini response');
-      console.error('Response structure:', JSON.stringify(geminiData, null, 2));
+      console.error('No image in parts');
       return res.status(500).json({
         error: 'No image generated',
-        details: 'Gemini did not return image data'
+        details: 'No inline_data in response parts',
+        parts: candidate.content.parts
       });
     }
 
-    console.log('Image generated successfully with Gemini 3.1 Flash Image');
+    console.log('Success! Image generated');
 
-    // Return the generated image immediately (synchronous response)
     return res.status(200).json({
       status: 'succeeded',
       imageBase64: imageBase64,
       renderingType: 'basic',
-      model: 'gemini-3.1-flash-image-preview'
+      model: 'gemini-2.5-flash-image'
     });
 
   } catch (error) {
-    console.error('Basic render error:', error);
+    console.error('Error:', error);
     return res.status(500).json({
       error: 'Internal server error',
-      details: error.message
+      details: error.message,
+      stack: error.stack
     });
   }
 }
