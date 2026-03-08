@@ -34,10 +34,10 @@ export default async function handler(req, res) {
 
     console.log('Starting basic render with Gemini 2.5 Flash Image...');
 
-    // Generate enhanced prompt for image transformation
+    // Generate prompt for image transformation
     const promptText = `Transform this ${roomType} interior into ${style} style. ${styleDescription}. Maintain room structure and layout while redesigning the aesthetic.`;
 
-    // Call Gemini 2.5 Flash Image API with correct format
+    // Call Gemini 2.5 Flash Image API
     const geminiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent`,
       {
@@ -76,49 +76,45 @@ export default async function handler(req, res) {
     }
 
     const geminiData = await geminiResponse.json();
-    console.log('Gemini response structure:', JSON.stringify(geminiData, null, 2));
+    console.log('Gemini response received');
 
-    // Extract the generated image from the response
+    // Extract the generated image
     if (!geminiData.candidates || geminiData.candidates.length === 0) {
       console.error('No candidates in response');
       return res.status(500).json({
         error: 'No response from Gemini',
-        details: 'No candidates returned',
-        response: geminiData
+        details: 'No candidates returned'
       });
     }
 
     const candidate = geminiData.candidates[0];
-
     if (!candidate.content || !candidate.content.parts) {
-      console.error('No content parts');
       return res.status(500).json({
         error: 'Invalid response format',
-        details: 'No content parts',
-        candidate
+        details: 'No content parts'
       });
     }
 
-    // Extract image data
+    // Extract image data - handle both inline_data (snake_case) and inlineData (camelCase)
     let imageBase64 = null;
     for (const part of candidate.content.parts) {
-      if (part.inline_data && part.inline_data.data) {
-        imageBase64 = part.inline_data.data;
-        console.log('Found image data, length:', imageBase64.length);
+      const inlineData = part.inline_data || part.inlineData;
+      if (inlineData && inlineData.data) {
+        imageBase64 = inlineData.data;
+        console.log('Found image, size:', imageBase64.length);
         break;
       }
     }
 
     if (!imageBase64) {
-      console.error('No image in parts');
+      console.error('No image in response');
       return res.status(500).json({
         error: 'No image generated',
-        details: 'No inline_data in response parts',
-        parts: candidate.content.parts
+        details: 'No image data in response'
       });
     }
 
-    console.log('Success! Image generated');
+    console.log('✅ Image generated successfully');
 
     return res.status(200).json({
       status: 'succeeded',
@@ -131,8 +127,7 @@ export default async function handler(req, res) {
     console.error('Error:', error);
     return res.status(500).json({
       error: 'Internal server error',
-      details: error.message,
-      stack: error.stack
+      details: error.message
     });
   }
 }
