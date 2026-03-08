@@ -1,6 +1,7 @@
 // Fast AI rendering endpoint using Gemini 3.1 Flash Image Preview
 // Updated: 2026-03-08 - Using gemini-3.1-flash-image-preview for fast image generation (5-10 seconds)
 // This model supports native image-to-image transformation with low latency
+// Synchronous response - returns image immediately
 
 export default async function handler(req, res) {
   // Enable CORS
