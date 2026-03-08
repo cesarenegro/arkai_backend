@@ -85,7 +85,7 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        version: '2e45f70b0e9e6b5e7e7b9c0e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c',  // SDXL Turbo ControlNet (placeholder - need to verify)
+        version: '9acfec0f076cc176856f2f51f55eb0faaabcce25db36e471b3e8f658bcf7a43f',  // SDXL Turbo ControlNet (placeholder - need to verify)
         input: {
           image: imageUrl,
           prompt: enhancedPrompt,
