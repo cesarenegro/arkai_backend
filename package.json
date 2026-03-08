@@ -1,0 +1,27 @@
+{
+  "name": "arkai-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Backend API for Arkai iOS app",
+  "main": "index.js",
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "setup": "node setup-database.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "arkai",
+    "backend",
+    "api"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@vercel/postgres": "^0.5.0",
+    "dotenv": "^17.3.1",
+    "formdata-node": "^6.0.3",
+    "pg": "^8.11.3"
+  }
+}
