@@ -40,6 +40,7 @@ export default async function handler(req, res) {
     const formData = new FormData();
     formData.append('content', new Blob([imageBuffer], { type: 'image/jpeg' }), 'image.jpg');
 
+    console.log('Uploading image to Replicate...');
     const uploadResponse = await fetch('https://api.replicate.com/v1/files', {
       method: 'POST',
       headers: {
@@ -55,13 +56,27 @@ export default async function handler(req, res) {
     }
 
     const uploadData = await uploadResponse.json();
-    const imageUrl = uploadData.urls.get;
+    console.log('Upload response:', JSON.stringify(uploadData, null, 2));
+
+    // Get the image URL from the upload response
+    const imageUrl = uploadData.urls?.get;
+
+    if (!imageUrl) {
+      console.error('No image URL in upload response:', uploadData);
+      return res.status(500).json({
+        error: 'Failed to get image URL from upload',
+        details: 'Upload succeeded but no URL returned'
+      });
+    }
+
+    console.log('Image uploaded successfully:', imageUrl);
 
     // Generate enhanced prompt
     const basePrompt = `Transform this ${roomType} interior space into ${style} style. ${styleDescription}. Maintain the room's structure and layout while applying the new design aesthetic.`;
     const enhancedPrompt = `${basePrompt}, masterfully designed interior, photorealistic, interior design magazine quality, 8k uhd, highly detailed`;
 
     // Start Replicate prediction (async)
+    console.log('Starting Replicate prediction...');
     const response = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
@@ -88,6 +103,8 @@ export default async function handler(req, res) {
       console.error('Replicate API error:', data);
       return res.status(500).json({ error: 'Replicate API request failed', details: data });
     }
+
+    console.log('Prediction started:', data.id);
 
     // Return prediction ID immediately - client will poll for status
     return res.status(200).json({

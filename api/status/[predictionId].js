@@ -1,5 +1,5 @@
 // Check Replicate prediction status
-// Updated: 2026-03-08 - Status polling endpoint
+// Updated: 2026-03-08 - Handle different output formats
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -28,6 +28,8 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Replicate API key not configured' });
     }
 
+    console.log(`Checking status for prediction: ${predictionId}`);
+
     // Get prediction status from Replicate
     const response = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
       headers: {
@@ -43,30 +45,81 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to get prediction status', details: data });
     }
 
+    console.log(`Prediction status: ${data.status}`);
+
     // If succeeded, download and return the image as base64
     if (data.status === 'succeeded') {
-      const outputUrl = data.output && data.output[0];
+      console.log('Prediction succeeded, processing output...');
+      console.log('Output type:', typeof data.output);
+      console.log('Output:', JSON.stringify(data.output));
 
-      if (!outputUrl) {
-        return res.status(500).json({
-          error: 'No output image from Replicate',
-          status: 'failed'
+      // Handle different output formats
+      let outputUrl;
+
+      if (Array.isArray(data.output)) {
+        outputUrl = data.output[0];
+      } else if (typeof data.output === 'string') {
+        outputUrl = data.output;
+      } else if (data.output && typeof data.output === 'object') {
+        // Some models return objects with URLs in different fields
+        outputUrl = data.output.url || data.output.image || data.output[0];
+      }
+
+      if (!outputUrl || typeof outputUrl !== 'string') {
+        console.error('Could not extract output URL');
+        console.error('Output data:', JSON.stringify(data.output));
+        return res.status(200).json({
+          status: 'failed',
+          error: 'No valid output URL from Replicate'
         });
       }
 
-      // Download the image and convert to base64
-      const imageResponse = await fetch(outputUrl);
-      const imageBuffer = await imageResponse.arrayBuffer();
-      const imageBase64 = Buffer.from(imageBuffer).toString('base64');
+      // Validate URL format
+      try {
+        new URL(outputUrl);
+      } catch (urlError) {
+        console.error('Invalid URL format:', outputUrl);
+        return res.status(200).json({
+          status: 'failed',
+          error: `Invalid output URL format: ${outputUrl.substring(0, 50)}`
+        });
+      }
 
-      return res.status(200).json({
-        status: 'succeeded',
-        imageBase64
-      });
+      console.log(`Downloading image from: ${outputUrl}`);
+
+      // Download the image and convert to base64
+      try {
+        const imageResponse = await fetch(outputUrl);
+
+        if (!imageResponse.ok) {
+          console.error(`Failed to download image: ${imageResponse.status} ${imageResponse.statusText}`);
+          return res.status(200).json({
+            status: 'failed',
+            error: `Failed to download result image: ${imageResponse.status}`
+          });
+        }
+
+        const imageBuffer = await imageResponse.arrayBuffer();
+        const imageBase64 = Buffer.from(imageBuffer).toString('base64');
+
+        console.log(`Image downloaded successfully, size: ${imageBuffer.byteLength} bytes`);
+
+        return res.status(200).json({
+          status: 'succeeded',
+          imageBase64
+        });
+      } catch (fetchError) {
+        console.error('Error fetching image:', fetchError);
+        return res.status(200).json({
+          status: 'failed',
+          error: `Failed to fetch image: ${fetchError.message}`
+        });
+      }
     }
 
     // If failed, return error
     if (data.status === 'failed') {
+      console.error('Prediction failed:', data.error);
       return res.status(200).json({
         status: 'failed',
         error: data.error || 'Prediction failed'
@@ -80,9 +133,11 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Status check error:', error);
+    console.error('Error stack:', error.stack);
     return res.status(500).json({
       error: 'Internal server error',
-      details: error.message
+      details: error.message,
+      stack: error.stack?.split('\n').slice(0, 3).join(' | ')
     });
   }
 }
