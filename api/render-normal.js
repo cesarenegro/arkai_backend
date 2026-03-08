@@ -1,5 +1,5 @@
 // Normal quality AI rendering endpoint using Gemini 3.1 Flash Image Preview
-// Updated: 2026-03-08 - Using gemini-3.1-flash-image-preview for fast image generation (5-10 seconds)
+// Updated: 2026-03-08 - Using gemini-3.1-flash-image-preview for fast image generation (3-5 seconds)
 // This model supports native image-to-image transformation with low latency
 // Synchronous response - returns image immediately
 
@@ -32,18 +32,19 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Gemini API key not configured' });
     }
 
-    console.log('Starting fast render with Gemini 3.1 Flash Image Preview...');
+    console.log('Starting normal render with Gemini 3.1 Flash Image Preview...');
 
     // Generate enhanced prompt for image transformation
     const basePrompt = `Transform this ${roomType} interior space into ${style} style. ${styleDescription}. Maintain the room's structure and layout while applying the new design aesthetic.`;
-    const enhancedPrompt = `${basePrompt} Create a masterfully designed interior with photorealistic quality, magazine-worthy composition, 8k detail, and professional lighting.`;
+    const enhancedPrompt = `${basePrompt} Create a masterfully designed interior with photorealistic quality, professional composition, and high detail.`;
 
-    // Call Gemini 3.1 Flash Image Preview API
+    // Call Gemini 3.1 Flash Image Preview API with correct format
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=${geminiApiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent`,
       {
         method: 'POST',
         headers: {
+          'x-goog-api-key': geminiApiKey,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -61,10 +62,8 @@ export default async function handler(req, res) {
             ]
           }],
           generationConfig: {
-            temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 8192
+            responseModalities: ['TEXT', 'IMAGE'],
+            temperature: 0.8
           }
         })
       }
@@ -120,18 +119,18 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log('Image generated successfully with Gemini 3.1 Flash');
+    console.log('Image generated successfully with Gemini 3.1 Flash Image');
 
     // Return the generated image immediately (synchronous response)
     return res.status(200).json({
       status: 'succeeded',
       imageBase64: imageBase64,
-      renderingType: 'fast',
+      renderingType: 'normal',
       model: 'gemini-3.1-flash-image-preview'
     });
 
   } catch (error) {
-    console.error('Gemini render error:', error);
+    console.error('Normal render error:', error);
     return res.status(500).json({
       error: 'Internal server error',
       details: error.message

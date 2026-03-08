@@ -32,18 +32,19 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Gemini API key not configured' });
     }
 
-    console.log('Starting fast render with Gemini 3.1 Flash Image Preview...');
+    console.log('Starting basic render with Gemini 3.1 Flash Image Preview...');
 
     // Generate enhanced prompt for image transformation
     const basePrompt = `Transform this ${roomType} interior space into ${style} style. ${styleDescription}. Maintain the room's structure and layout while applying the new design aesthetic.`;
-    const enhancedPrompt = `${basePrompt} Create a masterfully designed interior with photorealistic quality, magazine-worthy composition, 8k detail, and professional lighting.`;
+    const enhancedPrompt = `${basePrompt} Create a well-designed interior with good composition and clean aesthetic.`;
 
-    // Call Gemini 3.1 Flash Image Preview API
+    // Call Gemini 3.1 Flash Image Preview API with correct format
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=${geminiApiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent`,
       {
         method: 'POST',
         headers: {
+          'x-goog-api-key': geminiApiKey,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -61,10 +62,8 @@ export default async function handler(req, res) {
             ]
           }],
           generationConfig: {
-            temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 8192
+            responseModalities: ['TEXT', 'IMAGE'],
+            temperature: 0.7
           }
         })
       }
@@ -120,7 +119,7 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log('Image generated successfully with Gemini 3.1 Flash');
+    console.log('Image generated successfully with Gemini 3.1 Flash Image');
 
     // Return the generated image immediately (synchronous response)
     return res.status(200).json({
@@ -131,7 +130,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Gemini render error:', error);
+    console.error('Basic render error:', error);
     return res.status(500).json({
       error: 'Internal server error',
       details: error.message
